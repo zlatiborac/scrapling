@@ -25,3 +25,7 @@ Thumbs.db
 
 /.venv
 __pycache__/
+
+/public/css/filament/
+/public/js/filament/
+/public/fonts/filament/

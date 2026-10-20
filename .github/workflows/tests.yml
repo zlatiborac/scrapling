@@ -15,7 +15,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: mbstring, dom, curl, pdo_sqlite, sqlite3
+          extensions: mbstring, dom, curl, intl, zip, pdo_sqlite, sqlite3
           coverage: none
           tools: composer:v2
       - uses: actions/setup-python@v5
@@ -25,3 +25,5 @@ jobs:
         run: sh scripts/setup.sh
       - name: Run Laravel and Scrapling integration tests
         run: php artisan test
+      - name: Run scraper URL policy tests
+        run: .venv/bin/python -m unittest discover -s tests/Python

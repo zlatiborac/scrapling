@@ -16,3 +16,4 @@ composer install --no-interaction --prefer-dist
 if ! grep -Eq '^APP_KEY=.+$' .env; then php artisan key:generate --no-interaction; fi
 [ -f database/database.sqlite ] || touch database/database.sqlite
 php artisan migrate --force --no-interaction
+php artisan db:seed --class=LocalAdminSeeder --force --no-interaction
