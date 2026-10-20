@@ -56,3 +56,7 @@ Tests cover username authentication, administrator restrictions, password change
 For optional frontend asset development, install Node.js/npm, run `npm install`, then `composer run dev` alongside Herd. Filament's standard dashboard needs no custom frontend build.
 
 PHP dependencies are locked in `composer.lock` (PHP 8.4+ required); Python 3.12 dependencies and hashes are locked in `requirements.txt`. Keep `.env`, `.venv`, generated assets, and `vendor` out of Git.
+
+## Shared project instructions
+
+See [instructions/README.md](instructions/README.md) for the agreed workflow and [instructions/HANDOFF.md](instructions/HANDOFF.md) for the latest handoff. Future agents should start with the root [AGENTS.md](AGENTS.md).
