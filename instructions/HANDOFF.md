@@ -2,21 +2,22 @@
 
 ## Implemented
 
-- Native macOS Herd setup for Laravel, Filament, SQLite, and Python Scrapling.
-- `/admin` username login, administrator-only URL tester, and profile password editing.
-- Tester displays status, title, H1 headings, and JSON; reports fetch errors and limits attempts.
-- Local administrator creation is repeatable and preserves password changes. Production seeding does not create the starter account.
-- Shared project instructions now live in `instructions/`, discovered through root `AGENTS.md`.
+- Native macOS Herd setup: Laravel 12, Filament 4, SQLite, Python Scrapling. Use only `main`.
+- Username login, administrator-only URL tester, profile password editing, and repeatable local administrator creation.
+- Plugins: Activity Log 3.1 (Spatie Activitylog 4.12) and Environment Indicator 3.6, compatible with Filament 4.
+- Monitoring → Scrape history records dashboard outcomes, actor, redacted URL, timing, and response metadata; read-only, searchable, and filterable.
+- An environment badge and colored border identify the current environment for administrators.
+- Admin theme builds with Node.js/npm. `.node-version` selects Node 24; `package-lock.json` freezes npm packages. Setup runs `npm ci`, builds the theme, and applies activity-log migrations.
+- README.md describes local setup and plugins. Existing passwords and application keys remain preserved.
 
 ## Validation
 
-- Filament implementation: 15 Laravel tests (57 assertions) and 4 Python URL-policy tests passed.
-- Browser login, form submission, error rendering, and JavaScript checks passed on Linux.
-- Native setup ran successfully twice. Composer manifest validation passed.
-- Instruction documents: checked for internal links, consistency, and Git whitespace errors.
+- 21 Laravel tests passed (107 assertions), plus 4 Python URL-policy tests.
+- Browser checks passed for login, badge, recording an attempt, history navigation/details, URL redaction, JavaScript, and asset loading.
+- Node theme build, native installation/migrations, Composer manifest validation, and Git whitespace checks passed.
 
 ## Outstanding
 
-- macOS Herd startup still needs confirmation on the user's Mac.
+- macOS Herd startup still needs confirmation on the user's Mac. Install Node.js/npm before running the updated setup script.
 - External live fetching was not validated in the cloud because external hostname DNS was unavailable. Local HTTP fixture fetching passed.
-- No further feature request is pending. Fetch remote `main` before beginning the next task.
+- No further feature request is pending. Fetch remote `main` before the next task.

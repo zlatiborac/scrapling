@@ -21,6 +21,7 @@ These instructions apply to the entire project through the root `AGENTS.md`.
 - Run checks relevant to the change. For PHP/Python behavior changes, the main commands are:
   - `php artisan test`
   - `.venv/bin/python -m unittest discover -s tests/Python`
+- When changing frontend/theme sources, run `npm run build` (Node.js 24 recommended); use `npm ci` to install the locked dependencies.
 - Check meaningful UI changes in a browser when available. Distinguish automated checks, browser checks, external live fetches, and macOS-specific verification.
 - Documentation-only edits need link/content checks and `git diff --check`; do not rerun unrelated application suites.
 - Report missing tools or network limitations accurately. Do not weaken application protections to make a check pass.

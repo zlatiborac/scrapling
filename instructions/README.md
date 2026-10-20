@@ -15,8 +15,12 @@ This folder holds the shared instructions for the user and future coding agents.
 ## Project map
 
 - Laravel 12, Filament 4, PHP 8.4+, Python 3.12, Scrapling 0.5, SQLite.
+- Node.js 24/npm build the admin theme; native Herd remains the webserver.
+- Plugins: Activity Log 3.x (Spatie Activitylog 4.x) and Environment Indicator 3.x.
 - `app/Filament/Pages/TestScraper.php`: URL tester and results UI.
 - `app/Filament/Auth/Login.php`: username login.
+- `app/Services/ScrapeHistory.php`: redacted summary logging for dashboard attempts.
+- `app/Filament/Resources/ScrapeHistoryResource.php`: administrator-only, read-only history.
 - `app/Services/Scraper.php`: Laravel-to-Python subprocess integration.
 - `scripts/scrape.py`: HTTP fetching, extraction, and URL destination policy.
 - `scripts/setup.sh`: repeatable native installation, migrations, and local admin creation.

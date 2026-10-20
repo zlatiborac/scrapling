@@ -29,3 +29,6 @@ __pycache__/
 /public/css/filament/
 /public/js/filament/
 /public/fonts/filament/
+
+/public/css/filament-environment-indicator/
+/public/css/rmsramos/

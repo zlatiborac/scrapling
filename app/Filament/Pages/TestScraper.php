@@ -2,13 +2,14 @@
 
 namespace App\Filament\Pages;
 
+use App\Services\ScrapeHistory;
 use App\Services\Scraper;
 use BackedEnum;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class TestScraper extends Page
@@ -60,14 +61,30 @@ class TestScraper extends Page
             return;
         }
 
+        $state = $this->form->getState();
+        RateLimiter::hit('scrape:'.auth()->id(), 60);
+        $startedAt = hrtime(true);
+
         try {
-            $state = $this->form->getState();
-            RateLimiter::hit('scrape:'.auth()->id(), 60);
             $this->result = $scraper->scrape($state['url']);
-        } catch (ValidationException $exception) {
-            throw $exception;
         } catch (Throwable $exception) {
             $this->error = $exception->getMessage();
+        }
+
+        // Keep audit storage errors distinct from a failed fetch; never rerun the request.
+        try {
+            app(ScrapeHistory::class)->record(
+                auth()->user(),
+                $state['url'],
+                $this->result,
+                (int) ((hrtime(true) - $startedAt) / 1_000_000),
+            );
+        } catch (Throwable $exception) {
+            report($exception);
+            Notification::make()
+                ->title('The attempt could not be saved to scrape history.')
+                ->warning()
+                ->send();
         }
     }
 }
