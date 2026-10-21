@@ -12,6 +12,8 @@ use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Spatie\Activitylog\Models\Activity;
 use Tests\TestCase;
 
 class AdminPanelTest extends TestCase
@@ -92,6 +94,74 @@ class AdminPanelTest extends TestCase
         Livewire::test(TestScraper::class)
             ->fillForm(['url' => 'not-a-url'])
             ->call('scrape')->assertHasFormErrors(['url']);
+    }
+
+    #[DataProvider('pageAddresses')]
+    public function test_page_addresses_use_the_selected_protocol_unless_a_full_url_is_entered(string $protocol, string $input, string $expected): void
+    {
+        $this->actingAs($this->admin());
+        $this->mock(Scraper::class, function ($mock) use ($expected) {
+            $mock->shouldReceive('scrape')->once()->with($expected)->andReturn([
+                'url' => $expected, 'status' => 200, 'title' => 'Resolved page', 'headings' => [],
+            ]);
+        });
+
+        Livewire::test(TestScraper::class)
+            ->assertFormSet(['scheme' => 'https'])
+            ->fillForm(['scheme' => $protocol, 'url' => $input])
+            ->call('scrape')
+            ->assertHasNoFormErrors()
+            ->assertSet('error', null)
+            ->assertSee('Resolved page');
+
+        $this->assertSame($expected, Activity::sole()->properties['url']);
+    }
+
+    public static function pageAddresses(): array
+    {
+        return [
+            'domain defaults to HTTPS' => ['https', 'example.com', 'https://example.com'],
+            'domain with HTTP' => ['http', 'example.com', 'http://example.com'],
+            'domain and path' => ['https', '  example.com/article  ', 'https://example.com/article'],
+            'port and path' => ['http', 'example.com:8080/article', 'http://example.com:8080/article'],
+            'pasted HTTP overrides HTTPS' => ['https', 'http://example.com/article', 'http://example.com/article'],
+            'pasted HTTPS overrides HTTP' => ['http', '  https://example.com/article  ', 'https://example.com/article'],
+        ];
+    }
+
+    #[DataProvider('invalidPageAddresses')]
+    public function test_invalid_addresses_are_rejected_before_fetching(string $input): void
+    {
+        $this->actingAs($this->admin());
+        $this->mock(Scraper::class)->shouldNotReceive('scrape');
+
+        Livewire::test(TestScraper::class)
+            ->fillForm(['url' => $input])
+            ->call('scrape')
+            ->assertHasFormErrors(['url']);
+
+        $this->assertDatabaseCount('activity_log', 0);
+    }
+
+    public static function invalidPageAddresses(): array
+    {
+        return [
+            'empty address' => [''],
+            'whitespace' => ['   '],
+            'unsupported protocol' => ['ftp://example.com/file'],
+            'malformed address' => ['example .com'],
+        ];
+    }
+
+    public function test_an_invalid_protocol_cannot_be_submitted(): void
+    {
+        $this->actingAs($this->admin());
+        $this->mock(Scraper::class)->shouldNotReceive('scrape');
+
+        Livewire::test(TestScraper::class)
+            ->fillForm(['scheme' => 'ftp', 'url' => 'example.com'])
+            ->call('scrape')
+            ->assertHasFormErrors(['scheme']);
     }
 
     public function test_private_urls_show_an_error_and_clear_old_results(): void

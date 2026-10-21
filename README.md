@@ -22,7 +22,7 @@ Laravel 12 and Filament 4 provide a browser dashboard for [Scrapling](https://gi
 
    If the project is already in a Herd parked directory, you can skip linking. You can also add it through Herd's Sites interface.
 
-4. Open `http://scrapling.test/admin`. Sign in with username **vladmar** and the temporary local password **tiborzla**. Open **Test scraper**, paste a public HTTP or HTTPS URL, and click **Test URL**. The profile menu lets you change the password; rerunning setup will preserve your change.
+4. Open `http://scrapling.test/admin`. Sign in with username **vladmar** and the temporary local password **tiborzla**. Open **Test scraper**, select **https://** (the default) or **http://**, enter a public domain or page address, and click **Test URL**. You can also paste a complete HTTP or HTTPS URL; its protocol takes precedence over the selector. The profile menu lets you change the password; rerunning setup will preserve your change.
 
 The homepage redirects to the admin panel. A local administrator is created only when `APP_ENV=local` (or in automated tests), and only if that username does not already exist. The account uses `vladmar@localhost.test` as its initial profile email; login uses the username. Update the email in your profile if needed. The development password is intentionally shared for this local setup; choose a new one before making the site accessible to others. No registration or password-reset email flow is enabled.
 

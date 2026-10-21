@@ -5,9 +5,12 @@ namespace App\Filament\Pages;
 use App\Services\ScrapeHistory;
 use App\Services\Scraper;
 use BackedEnum;
+use Closure;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\RateLimiter;
 use Throwable;
@@ -35,15 +38,45 @@ class TestScraper extends Page
 
     public function form(Schema $schema): Schema
     {
+        $resolveUrl = static function (?string $state, Get $get): string {
+            $url = trim($state ?? '');
+
+            if ($url === '' || preg_match('~^[a-z][a-z0-9+.-]*://~i', $url)) {
+                return $url;
+            }
+
+            return $get('scheme').'://'.$url;
+        };
+
         return $schema
+            ->columns(['default' => 1, 'sm' => 4])
             ->components([
+                Select::make('scheme')
+                    ->label('Protocol')
+                    ->options(['https' => 'https://', 'http' => 'http://'])
+                    ->default('https')
+                    ->selectablePlaceholder(false)
+                    ->required()
+                    ->in(['http', 'https']),
                 TextInput::make('url')
                     ->label('Page URL')
-                    ->placeholder('https://example.com')
-                    ->url()
+                    ->placeholder('example.com or https://example.com/page')
+                    ->columnSpan(['default' => 1, 'sm' => 3])
+                    ->mutateStateForValidationUsing($resolveUrl)
+                    ->dehydrateStateUsing($resolveUrl)
+                    ->rules([
+                        'url:http,https',
+                        static fn (): Closure => static function (string $attribute, mixed $value, Closure $fail): void {
+                            $host = parse_url($value, PHP_URL_HOST);
+
+                            if (! is_string($host) || (! str_contains($host, '.') && ! filter_var(trim($host, '[]'), FILTER_VALIDATE_IP))) {
+                                $fail('Enter a valid public domain or HTTP or HTTPS URL.');
+                            }
+                        },
+                    ])
                     ->required()
                     ->maxLength(2048)
-                    ->helperText('Paste a public HTTP or HTTPS link to extract its title and headings.'),
+                    ->helperText('Enter a public domain or page address. A full URL overrides the selected protocol.'),
             ])
             ->statePath('data');
     }
