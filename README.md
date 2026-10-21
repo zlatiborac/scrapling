@@ -1,6 +1,6 @@
 # Scrapling admin with Laravel Herd
 
-Laravel 12 and Filament 4 provide a browser dashboard for [Scrapling](https://github.com/D4Vinci/Scrapling) 0.5. Paste a URL, click **Test URL**, and inspect the page title, HTTP status, H1 headings, and raw JSON. Laravel Herd serves the app on macOS; Python performs the fetch, and SQLite stores application data.
+Laravel 12 and Filament 4 provide a browser dashboard for [Scrapling](https://github.com/D4Vinci/Scrapling) 0.5. Test page metadata or find e-mail addresses on a single page or linked website pages. Laravel Herd serves the app on macOS; Python performs the fetch, and SQLite stores application data.
 
 ## Set up on your Mac mini
 
@@ -44,6 +44,18 @@ The optional CLI remains available for development, including local fixtures:
 php artisan scrape https://example.com
 ```
 
+## E-mail scraper
+
+Open **E-mail scraper** in the Filament sidebar (`http://scrapling.test/admin/email-scraper`). Enter a public domain such as `zlatibor.org.rs`, or paste a complete page URL. HTTPS is the default; a full URL overrides the protocol selector. Choose **Single page** for one page or **Website (linked pages)** to follow links from the starting page, then click **Find e-mails**.
+
+Results show unique addresses from page text and `mailto:` recipients, with every source page on which an address was found. The **Crawl log** records each discovered page's first referring page, link depth, final URL, fetch outcome, and e-mail count. The starting page has depth 0. Relative links are resolved, fragments are removed, and visited URLs are tracked to avoid repeated fetching and navigation loops. A failed linked page does not discard other results.
+
+Website mode follows links breadth first on the starting page's final hostname, including after an initial redirect to a canonical hostname such as `www`. Links and later redirects to other hostnames or ports are excluded; all fetched destinations still undergo the public-URL checks. Common downloadable assets are skipped. Default limits are **20 pages** and **3 link levels**, adjustable to 1–50 pages and depth 0–5. There is a **30-second crawl budget**, a 45-second subprocess timeout, a 500-discovered-page cap, and a short delay between pages. Limits and unvisited queued pages are shown explicitly, so a limited scan does not claim to have covered the whole website.
+
+This basic crawler discovers pages through HTML links; it does not use sitemaps, parse `robots.txt`, execute JavaScript, or decode addresses hidden in images or scripts. It may therefore miss pages and addresses. Respect the site's access rules. If a scan reaches a limit, try a specific section or contact page as the next starting URL. Scans are limited to five attempts per minute per administrator.
+
+Results and the crawl log remain on the current screen until navigation, refresh, or a new scan. They are **not persisted** or added to Scrape history, and scans cannot be resumed. This feature adds no dependencies, database migrations, scheduler, or queue-worker requirement. After pulling it on your Mac, run `npm run build` to refresh theme styles.
+
 ## Installed Filament plugins
 
 | Plugin | What it provides |
@@ -62,7 +74,7 @@ php artisan test
 .venv/bin/python -m unittest discover -s tests/Python
 ```
 
-Tests cover username authentication, administrator restrictions, password changes, safe repeat seeding, form validation/results, URL destination policy, and a real Laravel → Python → Scrapling → local HTTP fixture round trip. GitHub Actions installs native PHP and Python and runs the checks without Docker.
+Tests cover username authentication, administrator restrictions, password changes, safe repeat seeding, form validation/results, URL destination policy, e-mail extraction, bounded link discovery, redirects, partial results, and real Laravel → Python → Scrapling → local HTTP fixture round trips. GitHub Actions installs native PHP and Python and runs the checks without Docker.
 
 For frontend development, run `composer run dev` alongside Herd. For a static theme rebuild, run `npm run build`; `sh scripts/setup.sh` also builds it automatically.
 

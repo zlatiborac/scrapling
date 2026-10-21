@@ -22,10 +22,12 @@ This folder holds the shared instructions for the user and future coding agents.
 - Node.js 24/npm build the admin theme; native Herd remains the webserver.
 - Plugins: Activity Log 3.x (Spatie Activitylog 4.x) and Environment Indicator 3.x.
 - `app/Filament/Pages/TestScraper.php`: URL tester and results UI.
+- `app/Filament/Pages/EmailScraper.php`: single-page/website e-mail form, results, and per-scan crawl log (not persisted).
 - `app/Filament/Auth/Login.php`: username login.
 - `app/Services/ScrapeHistory.php`: redacted summary logging for dashboard attempts.
 - `app/Filament/Resources/ScrapeHistoryResource.php`: administrator-only, read-only history.
 - `app/Services/Scraper.php`: Laravel-to-Python subprocess integration.
+- `app/Services/EmailScraper.php` and `scripts/email_scrape.py`: bounded e-mail crawler, sources, and link tracking; shares the public URL policy from `scripts/scrape.py`.
 - `scripts/scrape.py`: HTTP fetching, extraction, and URL destination policy.
 - `scripts/setup.sh`: repeatable native installation, migrations, and local admin creation.
 - `README.md`: Herd setup, local login, usage, and test commands.
