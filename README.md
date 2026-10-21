@@ -71,3 +71,7 @@ PHP dependencies are locked in `composer.lock` (PHP 8.4+ required), npm dependen
 ## Shared project instructions
 
 See [instructions/README.md](instructions/README.md) for the agreed workflow and [instructions/HANDOFF.md](instructions/HANDOFF.md) for the latest handoff. Future agents should start with the root [AGENTS.md](AGENTS.md).
+
+## Design assistance for future work
+
+The repository includes a Filament-specific `scrapling-ui-design` agent skill and a pinned, MIT-licensed copy of [Taste Skill](https://github.com/leonxlnx/taste-skill). See [instructions/design/README.md](instructions/design/README.md) for usage. No additional application installation is required.

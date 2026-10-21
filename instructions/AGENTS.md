@@ -13,6 +13,7 @@ These instructions apply to the entire project through the root `AGENTS.md`.
 ## Implement and validate
 
 - Keep the user-facing workflow in Filament and preserve macOS Herd compatibility.
+- For meaningful UI/design changes, follow `.agents/skills/scrapling-ui-design/SKILL.md`; use the full pinned Taste Skill only for work that warrants it. See `instructions/design/README.md`.
 - Reuse existing setup scripts and dependency locks. Do not add dependencies or change locked versions without a reason tied to the task.
 - Preserve authentication, administrator restrictions, public URL checks at redirects, subprocess timeouts, and escaped output.
 - Never reset a user's password or application key during repeat setup. Keep local starter-account creation out of production.

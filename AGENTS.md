@@ -7,3 +7,5 @@ Before working on this repository, read:
 3. [instructions/HANDOFF.md](instructions/HANDOFF.md) — current state and unfinished work.
 
 Use [README.md](README.md) for installation and commands. Keep these instructions concise and current so new chats can continue without the conversation history.
+
+For meaningful UI/design work, read [.agents/skills/scrapling-ui-design/SKILL.md](.agents/skills/scrapling-ui-design/SKILL.md). Use its concise Filament workflow by default; load the full Taste Skill references only when the task needs them.

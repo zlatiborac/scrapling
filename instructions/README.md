@@ -12,6 +12,10 @@ This folder holds the shared instructions for the user and future coding agents.
 - For requested repository changes in this ongoing workflow, commit and push completed work to `main`, then report the commit and any local follow-up commands.
 - Keep handoffs short to reduce the context needed in later chats. Record durable decisions here, not full chat transcripts.
 
+## Design guidance
+
+[Design assistance](design/README.md) describes the local `scrapling-ui-design` skill and the pinned Taste Skill snapshot. Use the short Filament-specific skill for routine UI work and the full upstream toolbox for larger redesigns.
+
 ## Project map
 
 - Laravel 12, Filament 4, PHP 8.4+, Python 3.12, Scrapling 0.5, SQLite.

@@ -32,3 +32,6 @@ __pycache__/
 
 /public/css/filament-environment-indicator/
 /public/css/rmsramos/
+
+# Local design-tool outputs and screenshots
+/.taste-skill/
