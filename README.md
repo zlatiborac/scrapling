@@ -46,7 +46,7 @@ php artisan scrape https://example.com
 
 ## E-mail scraper
 
-Open **E-mail scraper** in the Filament sidebar (`http://scrapling.test/admin/email-scraper`). Enter a public domain such as `zlatibor.org.rs`, or paste a complete page URL. HTTPS is the default; a full URL overrides the protocol selector. Choose **Single page** for one page or **Website (linked pages)** to follow links from the starting page, then click **Find e-mails**.
+Open **E-mail scraper** in the Filament sidebar (`http://scrapling.test/admin/email-scraper`). Enter a public domain such as `zlatibor.org.rs`, or paste a complete page URL. HTTPS is the default; a full URL overrides the protocol selector. Choose **Single page** for one page or **Website (linked pages)** to follow links from the starting page. Optionally enter a **Scan name** (otherwise the starting hostname is used), then click **Find e-mails**.
 
 Results show unique addresses from page text and `mailto:` recipients, with every source page on which an address was found. The **Crawl log** records each discovered page's first referring page, link depth, final URL, fetch outcome, and e-mail count. The starting page has depth 0. Relative links are resolved, fragments are removed, and visited URLs are tracked to avoid repeated fetching and navigation loops. A failed linked page does not discard other results.
 
@@ -54,7 +54,21 @@ Website mode follows links breadth first on the starting page's final hostname, 
 
 This basic crawler discovers pages through HTML links; it does not use sitemaps, parse `robots.txt`, execute JavaScript, or decode addresses hidden in images or scripts. It may therefore miss pages and addresses. Respect the site's access rules. If a scan reaches a limit, try a specific section or contact page as the next starting URL. Scans are limited to five attempts per minute per administrator.
 
-Results and the crawl log remain on the current screen until navigation, refresh, or a new scan. They are **not persisted** or added to Scrape history, and scans cannot be resumed. This feature adds no dependencies, database migrations, scheduler, or queue-worker requirement. After pulling it on your Mac, run `npm run build` to refresh theme styles.
+Completed fetches, including scans stopped by a crawl limit, automatically save valid e-mails, source pages, and a named scan to SQLite. The result shows how many contacts are new or already saved. Each normalized address is stored once across all scans; matching ignores case and surrounding whitespace and is also enforced by a case-insensitive database unique index. Distinct addresses containing dots or `+tags` stay distinct. Repeated discoveries merge source pages, update the last-found time, and preserve manually edited contact names. Each run gets its own scan record, even when its contacts were already saved or no addresses were found.
+
+Use **Saved e-mails** (`/admin/saved-emails`) to search contacts, filter by saved scan, view source pages and first/last-found times, or **Rename** a contact. Initial contact names use the e-mail domain as a neutral label; change them to a person or organization name as needed. Use **Saved e-mail scans** (`/admin/email-scans`) to rename scans or **View e-mails** for one scan. Both screens require an administrator. Names can repeat; e-mail addresses remain fixed in the editor to preserve duplicate matching.
+
+Stored scan/source URLs omit credentials, query strings, and fragments, so source pages distinguished only by a query string are grouped. Detailed crawl logs and raw fetched content are not stored, and scans cannot be resumed. Failed fetches are not archived; a database failure leaves the fetched result visible with an explicit warning and does not repeat the crawl. Scans made before this storage feature must be rerun to save their addresses. The archive is separate from Scrape history.
+
+After pulling this update on your Mac, create the archive tables and refresh theme styles:
+
+```sh
+git pull origin main
+php artisan migrate
+npm run build
+```
+
+There are no new dependencies, scheduler tasks, or queue workers. The repeatable setup script also runs the migration while preserving existing data, application keys, and administrator passwords.
 
 ## Installed Filament plugins
 
@@ -74,7 +88,7 @@ php artisan test
 .venv/bin/python -m unittest discover -s tests/Python
 ```
 
-Tests cover username authentication, administrator restrictions, password changes, safe repeat seeding, form validation/results, URL destination policy, e-mail extraction, bounded link discovery, redirects, partial results, and real Laravel → Python → Scrapling → local HTTP fixture round trips. GitHub Actions installs native PHP and Python and runs the checks without Docker.
+Tests cover username authentication, administrator restrictions, password changes, safe repeat seeding, form validation/results, URL destination policy, e-mail extraction, bounded link discovery, redirects, partial results, archive persistence/rollback, case-insensitive duplicates, editable names, saved-contact search/filtering, and real Laravel → Python → Scrapling → local HTTP fixture round trips. GitHub Actions installs native PHP and Python and runs the checks without Docker.
 
 For frontend development, run `composer run dev` alongside Herd. For a static theme rebuild, run `npm run build`; `sh scripts/setup.sh` also builds it automatically.
 

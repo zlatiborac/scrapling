@@ -4,6 +4,8 @@ namespace App\Providers\Filament;
 
 use App\Filament\Auth\Login;
 use App\Filament\Pages\TestScraper;
+use App\Filament\Resources\EmailContactResource;
+use App\Filament\Resources\EmailScanResource;
 use App\Filament\Resources\ScrapeHistoryResource;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -54,6 +56,7 @@ class AdminPanelProvider extends PanelProvider
             ->profile(isSimple: false)
             ->colors(['primary' => Color::Indigo])
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
+            ->resources([EmailContactResource::class, EmailScanResource::class])
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,

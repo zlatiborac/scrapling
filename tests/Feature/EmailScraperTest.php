@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\EmailScraper;
 use App\Models\User;
+use App\Services\EmailArchive;
 use App\Services\EmailScraper as EmailScraperService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -65,6 +66,8 @@ class EmailScraperTest extends TestCase
             ->assertHasNoFormErrors()->assertSet('error', null)
             ->assertSee('info@example.com')->assertSee('https://example.com/contact')->assertSee('Crawl log');
         $this->assertDatabaseCount('activity_log', 0);
+        $this->assertDatabaseHas('email_contacts', ['email' => 'info@example.com']);
+        $this->assertDatabaseCount('email_scans', 1);
     }
 
     public function test_full_url_overrides_protocol_and_website_limits_are_passed_to_service(): void
@@ -77,6 +80,7 @@ class EmailScraperTest extends TestCase
         Livewire::test(EmailScraper::class)
             ->fillForm(['url' => 'http://example.com/section', 'scheme' => 'https', 'mode' => 'website', 'max_pages' => 12, 'max_depth' => 2])
             ->call('scrape')->assertHasNoFormErrors()->assertSee('page count')->assertSee('4 queued page(s) not visited');
+        $this->assertDatabaseCount('email_contacts', 1);
     }
 
     #[DataProvider('invalidInputs')]
@@ -165,6 +169,10 @@ class EmailScraperTest extends TestCase
             $this->assertCount(4, $website['pages']);
             $this->assertSame('failed', $website['pages'][2]['status']);
             $this->assertSame($url.'/contact', $website['pages'][3]['discovered_from']);
+            $scan = app(EmailArchive::class)->store($website, $url, 'Fixture website', $this->signIn());
+            $this->assertDatabaseCount('email_contacts', 3);
+            $this->assertDatabaseCount('email_contact_sources', 4);
+            $this->assertSame(3, $scan->contacts()->count());
         } finally {
             $server->stop();
         }

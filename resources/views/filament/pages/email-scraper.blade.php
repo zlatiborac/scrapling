@@ -26,6 +26,25 @@
     @endif
 
     @if ($result)
+        @if ($saveError)
+            <x-filament::section heading="Results were not saved">
+                <p role="alert" class="text-sm text-danger-600 dark:text-danger-400">{{ $saveError }}</p>
+            </x-filament::section>
+        @elseif ($saveSummary)
+            <x-filament::section heading="Saved to database">
+                <div class="grid gap-3 text-sm">
+                    <p>Saved scan: <strong>{{ $saveSummary['name'] }}</strong>.</p>
+                    <p>{{ $saveSummary['new'] }} new contact(s), {{ $saveSummary['existing'] }} already saved. Existing names were preserved.</p>
+                    @if ($saveSummary['skipped'])
+                        <p>{{ $saveSummary['skipped'] }} invalid e-mail entry/entries were skipped.</p>
+                    @endif
+                    <div class="flex flex-wrap gap-3">
+                        <x-filament::button tag="a" :href="\App\Filament\Resources\EmailScanResource::contactsUrl($saveSummary['id'])" size="sm">View saved e-mails</x-filament::button>
+                        <x-filament::button tag="a" :href="\App\Filament\Resources\EmailScanResource::getUrl('index')" color="gray" size="sm">Saved scans</x-filament::button>
+                    </div>
+                </div>
+            </x-filament::section>
+        @endif
         <x-filament::section heading="E-mail addresses">
             <div class="grid gap-4 text-sm">
                 <p>{{ count($result['emails']) }} unique e-mail(s) found on {{ $result['fetched'] }} fetched page(s).
@@ -76,7 +95,7 @@
                 @endforeach
             </div>
         </x-filament::section>
-        <p class="text-sm text-gray-600 dark:text-gray-400">Results belong to this screen and are cleared when you leave or start a new scan. They are not saved to Scrape history.</p>
+        <p class="text-sm text-gray-600 dark:text-gray-400">E-mails, source pages, and named scans are saved automatically when storage succeeds. The detailed crawl log is only kept on this screen. Use Saved e-mails or Saved e-mail scans to review results and rename records.</p>
     @elseif (! $error)
         <x-filament::section heading="Start with a page or website">
             <p class="text-sm text-gray-600 dark:text-gray-400">Enter a public page address above. Choose Single page for a quick check, or Website to discover linked pages from that address.</p>
