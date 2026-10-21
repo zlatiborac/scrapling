@@ -48,6 +48,8 @@ php artisan scrape https://example.com
 
 Open **E-mail scraper** in the Filament sidebar (`http://scrapling.test/admin/email-scraper`). Enter a public domain such as `zlatibor.org.rs`, or paste a complete page URL. HTTPS is the default; a full URL overrides the protocol selector. Choose **Single page** for one page or **Website (linked pages)** to follow links from the starting page. Optionally enter a **Scan name** (otherwise the starting hostname is used), then click **Find e-mails**.
 
+E-mail scans run as background jobs. Submission returns immediately, and the page polls for queued, running, completed, or failed status. You can leave the page, refresh, or reopen **Status / results** from Saved e-mail scans. Repeated submission from an active screen reuses its scan. A queued scan can be cancelled while waiting for a worker.
+
 Results show unique addresses from page text and `mailto:` recipients, with every source page on which an address was found. The **Crawl log** records each discovered page's first referring page, link depth, final URL, fetch outcome, and e-mail count. The starting page has depth 0. Relative links are resolved, fragments are removed, and visited URLs are tracked to avoid repeated fetching and navigation loops. A failed linked page does not discard other results.
 
 Website mode follows links breadth first on the starting page's final hostname, including after an initial redirect to a canonical hostname such as `www`. Links and later redirects to other hostnames or ports are excluded; all fetched destinations still undergo the public-URL checks. Common downloadable assets are skipped. Default limits are **20 pages** and **3 link levels**, adjustable to 1–50 pages and depth 0–5. There is a **30-second crawl budget**, a 45-second subprocess timeout, a 500-discovered-page cap, and a short delay between pages. Limits and unvisited queued pages are shown explicitly, so a limited scan does not claim to have covered the whole website.
@@ -56,19 +58,28 @@ This basic crawler discovers pages through HTML links; it does not use sitemaps,
 
 Completed fetches, including scans stopped by a crawl limit, automatically save valid e-mails, source pages, and a named scan to SQLite. The result shows how many contacts are new or already saved. Each normalized address is stored once across all scans; matching ignores case and surrounding whitespace and is also enforced by a case-insensitive database unique index. Distinct addresses containing dots or `+tags` stay distinct. Repeated discoveries merge source pages, update the last-found time, and preserve manually edited contact names. Each run gets its own scan record, even when its contacts were already saved or no addresses were found.
 
-Use **Saved e-mails** (`/admin/saved-emails`) to search contacts, filter by saved scan, view source pages and first/last-found times, or **Rename** a contact. Initial contact names use the e-mail domain as a neutral label; change them to a person or organization name as needed. Use **Saved e-mail scans** (`/admin/email-scans`) to rename scans or **View e-mails** for one scan. Both screens require an administrator. Names can repeat; e-mail addresses remain fixed in the editor to preserve duplicate matching.
+Use **Saved e-mails** (`/admin/saved-emails`) to search contacts, filter by saved scan, view source pages and first/last-found times, or **Rename** a contact. Initial contact names use the e-mail domain as a neutral label; change them to a person or organization name as needed. Use **Saved e-mail scans** (`/admin/email-scans`) to rename scans, filter by status, open **Status / results**, or **View e-mails** for one scan. Both screens require an administrator. Names can repeat; e-mail addresses remain fixed in the editor to preserve duplicate matching.
 
-Stored scan/source URLs omit credentials, query strings, and fragments, so source pages distinguished only by a query string are grouped. Detailed crawl logs and raw fetched content are not stored, and scans cannot be resumed. Failed fetches are not archived; a database failure leaves the fetched result visible with an explicit warning and does not repeat the crawl. Scans made before this storage feature must be rerun to save their addresses. The archive is separate from Scrape history.
+Stored scan/source URLs and crawl results omit credentials, query strings, and fragments, so source pages distinguished only by a query string are grouped. A redacted crawl log is retained for reopening results; page HTML and raw exception messages are not stored in scan records. The original request URL is temporarily encrypted with the application's existing key so the worker can fetch it, and is cleared on completion, failure, or cancellation. Earlier saved scans keep their contacts and names but have no stored crawl log. Scans made before the archive feature must be rerun to save their addresses. The archive is separate from Scrape history.
 
-After pulling this update on your Mac, create the archive tables and refresh theme styles:
+After pulling this update on your Mac, apply the queue-state migration and refresh configuration and theme styles:
 
 ```sh
 git pull origin main
 php artisan migrate
+php artisan config:clear
 npm run build
 ```
 
-There are no new dependencies, scheduler tasks, or queue workers. The repeatable setup script also runs the migration while preserving existing data, application keys, and administrator passwords.
+Start the worker in a separate terminal from the project folder and leave it running while using the e-mail scraper:
+
+```sh
+php -d max_execution_time=0 artisan queue:work scraping --tries=1 --timeout=75
+```
+
+Herd continues serving the website. Closing the worker terminal leaves new scans queued; start the command again to process them. Stop and restart the worker after pulling code updates. `composer run dev` also starts this worker alongside the frontend tools; use one of these approaches. No Redis, extra packages, or scheduler are needed. The repeatable setup script runs migrations while preserving existing data, application keys, and administrator passwords.
+
+The dedicated `scraping` connection uses the existing SQLite `jobs` table even when `QUEUE_CONNECTION=sync` is configured elsewhere. The web request only saves the scan and enqueues its identifier. The Python process remains limited to 45 seconds, the job to 75 seconds, and the database reservation is 120 seconds. A scan is atomically claimed once; jobs are not automatically retried, so interrupted jobs cannot silently repeat a crawl. Normal failures are shown on the saved scan; worker timeouts use the failure callback, and polling recovers a running record older than 120 seconds if the worker was killed. Start a new scan after a failure. A storage failure retains the redacted fetched result and rolls back contact changes.
 
 ## Installed Filament plugins
 
@@ -88,7 +99,7 @@ php artisan test
 .venv/bin/python -m unittest discover -s tests/Python
 ```
 
-Tests cover username authentication, administrator restrictions, password changes, safe repeat seeding, form validation/results, URL destination policy, e-mail extraction, bounded link discovery, redirects, partial results, archive persistence/rollback, case-insensitive duplicates, editable names, saved-contact search/filtering, and real Laravel → Python → Scrapling → local HTTP fixture round trips. GitHub Actions installs native PHP and Python and runs the checks without Docker.
+Tests cover username authentication, administrator restrictions, password changes, safe repeat seeding, form validation/results, URL destination policy, e-mail extraction, bounded link discovery, redirects, partial results, archive persistence/rollback, duplicate matching, editable names, saved-contact search/filtering, queue dispatch/recovery, encrypted request cleanup, redacted results, and a separate PHP worker consuming a real SQLite job through Python/Scrapling to a local HTTP fixture. GitHub Actions installs native PHP and Python and runs the checks without Docker.
 
 For frontend development, run `composer run dev` alongside Herd. For a static theme rebuild, run `npm run build`; `sh scripts/setup.sh` also builds it automatically.
 

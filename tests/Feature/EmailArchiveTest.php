@@ -19,11 +19,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use RuntimeException;
+use Tests\Concerns\RunsEmailScans;
 use Tests\TestCase;
 
 class EmailArchiveTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, RunsEmailScans;
 
     private User $admin;
 
@@ -57,8 +58,9 @@ class EmailArchiveTest extends TestCase
     public function test_dashboard_saves_named_partial_results_automatically(): void
     {
         $this->mock(EmailScraperService::class)->shouldReceive('scrape')->once()->andReturn($this->scanResult());
-        Livewire::test(EmailScraper::class)->fillForm(['url' => 'example.com', 'name' => 'Local tourism'])
-            ->call('scrape')->assertHasNoFormErrors()->assertSet('saveError', null)
+        $component = Livewire::test(EmailScraper::class)->fillForm(['url' => 'example.com', 'name' => 'Local tourism'])
+            ->call('scrape')->assertHasNoFormErrors();
+        $this->finishEmailScan($component)->assertSet('saveError', null)
             ->assertSee('Saved to database')->assertSee('Local tourism')->assertSee('1 new contact(s)');
 
         $this->assertDatabaseHas('email_contacts', ['email' => 'info@example.com', 'name' => 'example.com']);
@@ -164,8 +166,8 @@ class EmailArchiveTest extends TestCase
     {
         $this->mock(EmailScraperService::class)->shouldReceive('scrape')->once()->andReturn($this->scanResult());
         $this->mock(EmailArchive::class)->shouldReceive('store')->once()->andThrow(new RuntimeException('private database details'));
-        Livewire::test(EmailScraper::class)->fillForm(['url' => 'example.com'])->call('scrape')
-            ->assertSet('error', null)->assertSet('saveSummary', null)
+        $component = Livewire::test(EmailScraper::class)->fillForm(['url' => 'example.com'])->call('scrape');
+        $this->finishEmailScan($component)->assertSet('error', null)->assertSet('saveSummary', null)
             ->assertSee('Results were not saved')->assertSee('info@example.com')
             ->assertDontSee('private database details');
     }

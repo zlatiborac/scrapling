@@ -8,7 +8,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class EmailScan extends Model
 {
-    protected $fillable = ['name', 'url', 'mode', 'user_id', 'new_count', 'existing_count', 'skipped_count'];
+    protected $fillable = ['name', 'url', 'mode', 'user_id', 'new_count', 'existing_count', 'skipped_count',
+        'status', 'request', 'result', 'failure_message', 'started_at', 'finished_at'];
+
+    protected $hidden = ['request'];
+
+    protected function casts(): array
+    {
+        return ['request' => 'encrypted:array', 'result' => 'array', 'started_at' => 'datetime', 'finished_at' => 'datetime'];
+    }
 
     public function contacts(): BelongsToMany
     {

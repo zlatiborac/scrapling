@@ -7,16 +7,31 @@
     <form wire:submit="scrape" class="grid gap-6">
         {{ $this->form }}
         <div>
-            <x-filament::button type="submit" wire:loading.attr="disabled" wire:target="scrape">
+            <x-filament::button type="submit" wire:loading.attr="disabled" wire:target="scrape" :disabled="in_array($scanStatus, ['queued', 'running'], true)">
                 <span wire:loading.remove wire:target="scrape">Find e-mails</span>
-                <span wire:loading wire:target="scrape">Scanning pages…</span>
+                <span wire:loading wire:target="scrape">Queuing scan…</span>
             </x-filament::button>
         </div>
     </form>
 
     <p wire:loading wire:target="scrape" role="status" class="text-sm text-gray-600 dark:text-gray-400">
-        Following links and collecting source pages. Results will appear when the scan finishes.
+        Submitting the scan. Fetching and saving will run in the background.
     </p>
+
+    @if (in_array($scanStatus, ['queued', 'running'], true))
+        <div wire:poll.3s="refreshScan" role="status">
+            <x-filament::section :heading="$scanStatus === 'queued' ? 'Scan queued' : 'Scan running'">
+                <div class="grid gap-3 text-sm">
+                    <p>You can leave this page. The background worker will fetch and save the results; reopen this scan from Saved e-mail scans.</p>
+                    @if ($scanStatus === 'queued')
+                        <p>If the scan stays queued, start the e-mail worker in a terminal from your project folder:</p>
+                        <pre class="overflow-x-auto">php -d max_execution_time=0 artisan queue:work scraping --tries=1 --timeout=75</pre>
+                        <div><x-filament::button color="gray" wire:click="cancelQueuedScan" wire:loading.attr="disabled">Cancel queued scan</x-filament::button></div>
+                    @endif
+                </div>
+            </x-filament::section>
+        </div>
+    @endif
 
     <div wire:loading.remove wire:target="scrape" class="grid gap-6">
     @if ($error)
@@ -95,8 +110,13 @@
                 @endforeach
             </div>
         </x-filament::section>
-        <p class="text-sm text-gray-600 dark:text-gray-400">E-mails, source pages, and named scans are saved automatically when storage succeeds. The detailed crawl log is only kept on this screen. Use Saved e-mails or Saved e-mail scans to review results and rename records.</p>
-    @elseif (! $error)
+        <p class="text-sm text-gray-600 dark:text-gray-400">E-mails, source pages, named scans, and a redacted crawl log are saved automatically. Use Saved e-mails or Saved e-mail scans to review results and rename records.</p>
+    @elseif ($scanStatus === 'completed' && $saveSummary)
+        <x-filament::section heading="Scan completed">
+            <p class="mb-3 text-sm">This earlier scan has no stored crawl log. Its saved contacts are available below.</p>
+            <x-filament::button tag="a" :href="\App\Filament\Resources\EmailScanResource::contactsUrl($saveSummary['id'])">View saved e-mails</x-filament::button>
+        </x-filament::section>
+    @elseif (! $error && ! in_array($scanStatus, ['queued', 'running'], true))
         <x-filament::section heading="Start with a page or website">
             <p class="text-sm text-gray-600 dark:text-gray-400">Enter a public page address above. Choose Single page for a quick check, or Website to discover linked pages from that address.</p>
         </x-filament::section>

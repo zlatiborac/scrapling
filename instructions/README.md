@@ -22,7 +22,9 @@ This folder holds the shared instructions for the user and future coding agents.
 - Node.js 24/npm build the admin theme; native Herd remains the webserver.
 - Plugins: Activity Log 3.x (Spatie Activitylog 4.x) and Environment Indicator 3.x.
 - `app/Filament/Pages/TestScraper.php`: URL tester and results UI.
-- `app/Filament/Pages/EmailScraper.php`: single-page/website e-mail form and automatic archive saving; detailed crawl log remains on the current screen.
+- `app/Filament/Pages/EmailScraper.php`: single-page/website e-mail form, queue submission, status polling, and reopening saved results.
+- `app/Jobs/ProcessEmailScan.php` and `app/Services/EmailScanQueue.php`: dedicated SQLite queue, one-attempt worker, and atomic scan claiming; use `php -d max_execution_time=0 artisan queue:work scraping --tries=1 --timeout=75` alongside Herd.
+- `app/Services/EmailScanResult.php`: redacted persisted crawl results and safe failure messages. Full request URLs are temporarily encrypted in the scan, then cleared at completion/failure/cancellation.
 - `app/Filament/Resources/EmailContactResource.php` and `EmailScanResource.php`: searchable saved e-mails and named scans, with administrator-only name editing.
 - `app/Services/EmailArchive.php` and `app/Models/Email*.php`: transactional SQLite archive, normalized unique contacts, redacted source pages, and scan membership. Repeated scans preserve edited names.
 - `app/Filament/Auth/Login.php`: username login.

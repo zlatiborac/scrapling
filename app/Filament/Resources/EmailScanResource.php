@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Pages\EmailScraper;
 use App\Filament\Resources\EmailScanResource\Pages\ManageEmailScans;
 use App\Models\EmailScan;
 use BackedEnum;
@@ -11,6 +12,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class EmailScanResource extends Resource
@@ -45,6 +47,10 @@ class EmailScanResource extends Resource
     {
         return $table->columns([
             TextColumn::make('name')->label('Scan name')->searchable()->sortable()->wrap(),
+            TextColumn::make('status')->label('Status')->badge()->formatStateUsing(fn (string $state): string => ucfirst($state))
+                ->color(fn (string $state): string => match ($state) {
+                    'completed' => 'success', 'failed' => 'danger', default => 'warning'
+                }),
             TextColumn::make('url')->label('Starting page')->searchable()->wrap()->limit(80),
             TextColumn::make('mode')->label('Scan')->formatStateUsing(fn (string $state): string => $state === 'website' ? 'Website' : 'Single page'),
             TextColumn::make('contacts_count')->label('E-mails')->counts('contacts')->numeric(),
@@ -53,12 +59,15 @@ class EmailScanResource extends Resource
             TextColumn::make('created_at')->label('When')->dateTime()->sortable(),
         ])
             ->defaultSort('created_at', 'desc')
+            ->poll('5s')
+            ->filters([SelectFilter::make('status')->options(['queued' => 'Queued', 'running' => 'Running', 'completed' => 'Completed', 'failed' => 'Failed'])])
             ->recordActions([
+                Action::make('progress')->label('Status / results')->url(fn (EmailScan $record): string => EmailScraper::getUrl(['scan' => $record->id])),
                 Action::make('contacts')->label('View e-mails')->url(fn (EmailScan $record): string => static::contactsUrl($record)),
                 EditAction::make()->label('Rename'),
             ])
             ->emptyStateHeading('No saved scans yet')
-            ->emptyStateDescription('Successful E-mail scraper results will appear here, including scans with no addresses found.');
+            ->emptyStateDescription('Queued, running, completed, and failed E-mail scraper scans will appear here.');
     }
 
     public static function getPages(): array

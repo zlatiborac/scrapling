@@ -31,6 +31,17 @@ return [
 
     'connections' => [
 
+        // Always asynchronous, using jobs in the same database as the scan record.
+        // This deliberately does not inherit QUEUE_CONNECTION=sync or DB_QUEUE_CONNECTION.
+        'scraping' => [
+            'driver' => 'database',
+            'connection' => null,
+            'table' => 'jobs',
+            'queue' => 'email-scans',
+            'retry_after' => 120,
+            'after_commit' => false,
+        ],
+
         'sync' => [
             'driver' => 'sync',
         ],

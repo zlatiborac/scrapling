@@ -2,8 +2,8 @@
 
 namespace App\Filament\Pages;
 
-use App\Services\EmailArchive;
-use App\Services\EmailScraper as EmailScraperService;
+use App\Models\EmailScan;
+use App\Services\EmailScanQueue;
 use BackedEnum;
 use Closure;
 use Filament\Forms\Components\Select;
@@ -12,6 +12,8 @@ use Filament\Pages\Page;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\RateLimiter;
+use Livewire\Attributes\Locked;
+use Livewire\Attributes\Url;
 use Throwable;
 
 class EmailScraper extends Page
@@ -34,6 +36,12 @@ class EmailScraper extends Page
 
     public ?string $saveError = null;
 
+    #[Locked]
+    #[Url(as: 'scan')]
+    public ?int $scanId = null;
+
+    public ?string $scanStatus = null;
+
     public static function canAccess(): bool
     {
         return (bool) auth()->user()?->is_admin;
@@ -42,6 +50,9 @@ class EmailScraper extends Page
     public function mount(): void
     {
         $this->form->fill();
+        $this->scanId ??= EmailScan::where('user_id', auth()->id())
+            ->whereIn('status', ['queued', 'running'])->latest('id')->value('id');
+        $this->refreshScan();
     }
 
     public function form(Schema $schema): Schema
@@ -90,13 +101,19 @@ class EmailScraper extends Page
             ])->statePath('data');
     }
 
-    public function scrape(EmailScraperService $scraper): void
+    public function scrape(): void
     {
         abort_unless(auth()->user()?->is_admin, 403);
         $this->result = null;
         $this->error = null;
         $this->saveSummary = null;
         $this->saveError = null;
+
+        if ($this->scanId && EmailScan::whereKey($this->scanId)->whereIn('status', ['queued', 'running'])->exists()) {
+            $this->refreshScan();
+
+            return;
+        }
 
         if (RateLimiter::tooManyAttempts('email-scrape:'.auth()->id(), 5)) {
             $this->error = 'Please wait a minute before starting another e-mail scan.';
@@ -108,28 +125,61 @@ class EmailScraper extends Page
         RateLimiter::hit('email-scrape:'.auth()->id(), 60);
 
         try {
-            $this->result = $scraper->scrape(
-                $state['url'],
-                $state['mode'] === 'website',
-                (int) ($state['max_pages'] ?? 20),
-                (int) ($state['max_depth'] ?? 3),
-            );
+            $this->scanId = app(EmailScanQueue::class)->submit($state, auth()->user())->id;
         } catch (Throwable $exception) {
-            $this->error = $exception->getMessage();
+            report($exception);
+            $this->error = 'The scan could not be queued. Check that migrations have been run and try again.';
 
             return;
         }
 
-        // A storage failure must preserve the fetched result and never repeat the crawl.
-        try {
-            $scan = app(EmailArchive::class)->store($this->result, $state['url'], $state['name'] ?? null, auth()->user());
+        $this->refreshScan();
+    }
+
+    public function refreshScan(): void
+    {
+        abort_unless(auth()->user()?->is_admin, 403);
+        if (! $this->scanId) {
+            return;
+        }
+
+        $scan = EmailScan::findOrFail($this->scanId);
+        // Normal polls only read, avoiding SQLite write contention while archiving.
+        if ($scan->status === 'running' && $scan->started_at?->lt(now()->subSeconds(120))) {
+            // Recover a killed worker without auto-repeating the crawl.
+            EmailScan::whereKey($scan->id)->where('status', 'running')->where('started_at', '<', now()->subSeconds(120))
+                ->update(['status' => 'failed', 'request' => null, 'finished_at' => now(),
+                    'failure_message' => 'The background scan was interrupted or exceeded its time limit. Start a new scan.']);
+            $scan->refresh();
+        }
+
+        $this->scanStatus = $scan->status;
+        $this->error = null;
+        $this->saveError = null;
+        $this->saveSummary = null;
+        $this->result = in_array($scan->status, ['completed', 'failed'], true) ? $scan->result : null;
+        if ($scan->status === 'completed') {
             $this->saveSummary = [
                 'id' => $scan->id, 'name' => $scan->name,
                 'new' => $scan->new_count, 'existing' => $scan->existing_count, 'skipped' => $scan->skipped_count,
             ];
-        } catch (Throwable $exception) {
-            report($exception);
-            $this->saveError = 'The scan finished, but its results could not be saved. Keep these results before leaving and check the database setup.';
+        } elseif ($scan->status === 'failed') {
+            if ($this->result !== null) {
+                $this->saveError = $scan->failure_message;
+            } else {
+                $this->error = $scan->failure_message;
+            }
+        }
+    }
+
+    public function cancelQueuedScan(): void
+    {
+        abort_unless(auth()->user()?->is_admin, 403);
+        if ($this->scanId) {
+            EmailScan::whereKey($this->scanId)->where('status', 'queued')->update([
+                'status' => 'failed', 'request' => null, 'finished_at' => now(), 'failure_message' => 'The queued scan was cancelled.',
+            ]);
+            $this->refreshScan();
         }
     }
 }

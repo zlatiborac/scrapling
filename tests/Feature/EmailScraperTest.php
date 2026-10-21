@@ -13,11 +13,12 @@ use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Symfony\Component\Process\Process;
+use Tests\Concerns\RunsEmailScans;
 use Tests\TestCase;
 
 class EmailScraperTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, RunsEmailScans;
 
     protected function setUp(): void
     {
@@ -60,10 +61,11 @@ class EmailScraperTest extends TestCase
         $this->mock(EmailScraperService::class)->shouldReceive('scrape')->once()
             ->with('https://example.com', false, 20, 3)->andReturn($this->scanResult());
 
-        Livewire::test(EmailScraper::class)
+        $component = Livewire::test(EmailScraper::class)
             ->assertFormSet(['scheme' => 'https', 'mode' => 'page'])
             ->fillForm(['url' => '  example.com  '])->call('scrape')
-            ->assertHasNoFormErrors()->assertSet('error', null)
+            ->assertHasNoFormErrors()->assertSet('scanStatus', 'queued');
+        $this->finishEmailScan($component)->assertSet('error', null)
             ->assertSee('info@example.com')->assertSee('https://example.com/contact')->assertSee('Crawl log');
         $this->assertDatabaseCount('activity_log', 0);
         $this->assertDatabaseHas('email_contacts', ['email' => 'info@example.com']);
@@ -77,9 +79,10 @@ class EmailScraperTest extends TestCase
             ->with('http://example.com/section', true, 12, 2)
             ->andReturn($this->scanResult(['mode' => 'website', 'limits' => ['pages'], 'pending' => 4]));
 
-        Livewire::test(EmailScraper::class)
+        $component = Livewire::test(EmailScraper::class)
             ->fillForm(['url' => 'http://example.com/section', 'scheme' => 'https', 'mode' => 'website', 'max_pages' => 12, 'max_depth' => 2])
-            ->call('scrape')->assertHasNoFormErrors()->assertSee('page count')->assertSee('4 queued page(s) not visited');
+            ->call('scrape')->assertHasNoFormErrors();
+        $this->finishEmailScan($component)->assertSee('page count')->assertSee('4 queued page(s) not visited');
         $this->assertDatabaseCount('email_contacts', 1);
     }
 
@@ -114,9 +117,9 @@ class EmailScraperTest extends TestCase
         $this->signIn();
         $this->mock(EmailScraperService::class)->shouldReceive('scrape')->once()
             ->andThrow(new RuntimeException('<script>alert("failure")</script>'));
-        Livewire::test(EmailScraper::class)->set('result', $this->scanResult())
-            ->fillForm(['url' => 'example.com'])->call('scrape')
-            ->assertSet('result', null)->assertSee('&lt;script&gt;', escape: false)
+        $component = Livewire::test(EmailScraper::class)->set('result', $this->scanResult())
+            ->fillForm(['url' => 'example.com'])->call('scrape')->assertSet('result', null);
+        $this->finishEmailScan($component)->assertSet('result', null)->assertSee('Could not fetch this page')
             ->assertDontSee('<script>alert("failure")</script>', escape: false);
     }
 
@@ -126,8 +129,8 @@ class EmailScraperTest extends TestCase
         $result = $this->scanResult(['emails' => []]);
         $result['pages'][0]['error'] = '<img src=x onerror=alert(1)>';
         $this->mock(EmailScraperService::class)->shouldReceive('scrape')->once()->andReturn($result);
-        Livewire::test(EmailScraper::class)->fillForm(['url' => 'example.com'])->call('scrape')
-            ->assertSee('No e-mail addresses found')->assertSee('&lt;img', escape: false)
+        $component = Livewire::test(EmailScraper::class)->fillForm(['url' => 'example.com'])->call('scrape');
+        $this->finishEmailScan($component)->assertSee('No e-mail addresses found')->assertSee('Could not fetch this page')
             ->assertDontSee('<img src=x onerror=alert(1)>', escape: false);
     }
 

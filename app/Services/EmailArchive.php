@@ -10,9 +10,9 @@ use Illuminate\Support\Str;
 
 class EmailArchive
 {
-    public function store(array $result, string $url, ?string $name, User $user): EmailScan
+    public function store(array $result, string $url, ?string $name, User $user, ?EmailScan $scan = null): EmailScan
     {
-        return DB::transaction(function () use ($result, $url, $name, $user): EmailScan {
+        return DB::transaction(function () use ($result, $url, $name, $user, $scan): EmailScan {
             $new = 0;
             $existing = 0;
             $skipped = 0;
@@ -43,22 +43,24 @@ class EmailArchive
                 }
             }
 
-            $scan = EmailScan::create([
+            $scan ??= new EmailScan([
                 'name' => Str::limit(trim($name ?? '') ?: (parse_url($url, PHP_URL_HOST) ?: 'E-mail scan'), 255, ''),
                 'url' => $this->safeUrl($url),
                 'mode' => $result['mode'],
                 'user_id' => $user->id,
+            ]);
+            $scan->fill([
                 'new_count' => $new,
                 'existing_count' => $existing,
                 'skipped_count' => $skipped,
-            ]);
-            $scan->contacts()->attach($ids);
+            ])->save();
+            $scan->contacts()->syncWithoutDetaching($ids);
 
             return $scan;
         });
     }
 
-    private function safeUrl(string $url): ?string
+    public static function safeUrl(string $url): ?string
     {
         $parts = parse_url($url);
         if (! is_array($parts) || ! in_array($parts['scheme'] ?? '', ['http', 'https'], true) || empty($parts['host'])) {
