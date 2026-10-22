@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\EmailScanFailed;
 use App\Models\EmailScan;
 use App\Services\EmailArchive;
 use App\Services\EmailScanResult;
@@ -57,8 +58,10 @@ class ProcessEmailScan implements ShouldQueue
                 $current->update(['status' => 'completed', 'request' => null, 'finished_at' => now(), 'failure_message' => null]);
             });
         } catch (Throwable $exception) {
-            report($exception);
             $this->failed($exception);
+            // Returning normally makes Laravel print DONE even though the scan failed.
+            // Throw a safe exception so the queue records FAIL without leaking the target URL.
+            throw new EmailScanFailed(EmailScan::find($this->scanId)?->failure_message ?? EmailScanResult::failureMessage($exception));
         }
     }
 

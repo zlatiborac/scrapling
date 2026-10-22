@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+use App\Exceptions\EmailFetchFailed;
+use Illuminate\Queue\MaxAttemptsExceededException;
+use Illuminate\Queue\TimeoutExceededException;
 use Throwable;
 
 class EmailScanResult
@@ -19,7 +22,9 @@ class EmailScanResult
             foreach (['url', 'final_url', 'discovered_from'] as $key) {
                 $record[$key] = isset($page[$key]) ? EmailArchive::safeUrl($page[$key]) : null;
             }
-            $record['error'] = empty($page['error']) ? null : self::safeMessage($page['error']);
+            $record['error'] = empty($page['error']) ? null : (isset($page['error_code'])
+                ? (new EmailFetchFailed($page['error_code'], $page['http_status'] ?? null))->getMessage()
+                : self::safeMessage($page['error']));
 
             return $record;
         }, $result['pages']);
@@ -29,6 +34,13 @@ class EmailScanResult
 
     public static function failureMessage(Throwable $exception): string
     {
+        if ($exception instanceof EmailFetchFailed) {
+            return $exception->getMessage();
+        }
+        if ($exception instanceof TimeoutExceededException || $exception instanceof MaxAttemptsExceededException) {
+            return 'The background worker exceeded its execution limit or was interrupted. Start a new scan.';
+        }
+
         return self::safeMessage($exception->getMessage());
     }
 

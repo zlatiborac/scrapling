@@ -156,7 +156,7 @@ class EmailQueueTest extends TestCase
         $this->mock(ScraperService::class)->shouldNotReceive('scrape');
         $component = Livewire::test(EmailScraper::class)->fillForm(['url' => 'example.com'])->call('scrape');
         $this->admin->forceFill(['is_admin' => false])->save();
-        app()->call([new ProcessEmailScan(EmailScan::sole()->id), 'handle']);
+        $this->runEmailScanJob(EmailScan::sole()->id);
         $this->assertSame('failed', EmailScan::sole()->status);
         $this->assertNull(EmailScan::sole()->request);
         $component->call('refreshScan')->assertForbidden();

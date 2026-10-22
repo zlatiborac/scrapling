@@ -10,6 +10,7 @@ from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 
 from scrapling.fetchers import Fetcher
 from scrape import validate_url
+from email_errors import FetchError, describe_error
 
 
 MAX_DISCOVERED = 500
@@ -42,14 +43,14 @@ def site_key(url):
     return parsed.hostname, port
 
 
-def fetch_page(url, public_only, scope, deadline, visited):
+def fetch_page(url, public_only, scope, deadline, visited, request_timeout=10):
     """Validate every redirect before fetching, including same-site boundaries."""
     hops = set()
     for _ in range(6):
         if scope is not None and site_key(url) != scope:
-            raise ValueError("Redirect leaves the starting website")
+            raise FetchError("redirect_error", "Redirect leaves the starting website")
         if url in hops:
-            raise ValueError("Target returned a redirect loop")
+            raise FetchError("redirect_error", "Target returned a redirect loop")
         if url in visited:
             return None, url
         validate_url(url, public_only)
@@ -58,17 +59,17 @@ def fetch_page(url, public_only, scope, deadline, visited):
             raise TimeoutError("Crawl time limit reached")
         visited.add(url)
         hops.add(url)
-        page = Fetcher.get(url, timeout=min(10, remaining), follow_redirects=False, retries=0)
+        page = Fetcher.get(url, timeout=min(request_timeout, remaining), follow_redirects=False, retries=0)
         if page.status in {301, 302, 303, 307, 308}:
             location = page.headers.get("location") or page.headers.get("Location")
             if not location:
-                raise ValueError("Target returned a redirect without a destination")
+                raise FetchError("redirect_error", "Target returned a redirect without a destination")
             url = canonical_url(urljoin(url, location))
             continue
         if page.status >= 400:
-            raise ValueError(f"Target returned HTTP {page.status}")
+            raise FetchError("http_error", f"Target returned HTTP {page.status}", page.status)
         return page, canonical_url(str(page.url))
-    raise ValueError("Target returned too many redirects")
+    raise FetchError("redirect_error", "Target returned too many redirects")
 
 
 def extract_emails(page):
@@ -82,9 +83,11 @@ def extract_emails(page):
     return sorted({email.strip(".").lower() for email in matches})
 
 
-def crawl(url, website=False, max_pages=20, max_depth=3, public_only=True, time_limit=30, delay=0.25):
+def crawl(url, website=False, max_pages=20, max_depth=3, public_only=True, time_limit=30, delay=0.25, request_timeout=10):
     if not 1 <= max_pages <= 50 or not 0 <= max_depth <= 5:
         raise ValueError("Use 1–50 pages and a link depth of 0–5")
+    if not 0 < time_limit <= 30 or not 0 < request_timeout <= 10:
+        raise ValueError("Use a crawl budget up to 30 seconds and a request timeout up to 10 seconds")
     start = canonical_url(url)
     deadline = time.monotonic() + time_limit
     pages = []
@@ -127,7 +130,7 @@ def crawl(url, website=False, max_pages=20, max_depth=3, public_only=True, time_
         record = queue.popleft()
         attempted += 1
         try:
-            page, final = fetch_page(record["url"], public_only, scope, deadline, visited)
+            page, final = fetch_page(record["url"], public_only, scope, deadline, visited, request_timeout)
             record["final_url"] = final
             if page is None:
                 record["status"] = "duplicate"
@@ -160,8 +163,11 @@ def crawl(url, website=False, max_pages=20, max_depth=3, public_only=True, time_
             if attempted == 1:
                 raise
             record["status"] = "failed"
-            record["error"] = str(exc)[-500:]
-            if isinstance(exc, TimeoutError):
+            error = describe_error(exc)
+            record["error"] = error["message"]
+            record["error_code"] = error["code"]
+            record["http_status"] = error.get("http_status")
+            if isinstance(exc, TimeoutError) or time.monotonic() >= deadline:
                 limits.add("time")
         if queue and delay:
             time.sleep(min(delay, max(0, deadline - time.monotonic())))
@@ -182,9 +188,12 @@ if __name__ == "__main__":
     parser.add_argument("--max-pages", type=int, default=20)
     parser.add_argument("--max-depth", type=int, default=3)
     parser.add_argument("--public-only", action="store_true")
+    parser.add_argument("--time-limit", type=float, default=30)
+    parser.add_argument("--request-timeout", type=float, default=10)
     args = parser.parse_args()
     try:
-        print(json.dumps(crawl(args.url, args.website, args.max_pages, args.max_depth, args.public_only)))
+        print(json.dumps(crawl(args.url, args.website, args.max_pages, args.max_depth, args.public_only,
+                               time_limit=args.time_limit, request_timeout=args.request_timeout)))
     except Exception as exc:
-        print(str(exc), file=sys.stderr)
+        print(json.dumps({"error": describe_error(exc)}), file=sys.stderr)
         sys.exit(1)

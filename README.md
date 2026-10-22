@@ -81,6 +81,26 @@ Herd continues serving the website. Closing the worker terminal leaves new scans
 
 The dedicated `scraping` connection uses the existing SQLite `jobs` table even when `QUEUE_CONNECTION=sync` is configured elsewhere. The web request only saves the scan and enqueues its identifier. The Python process remains limited to 45 seconds, the job to 75 seconds, and the database reservation is 120 seconds. A scan is atomically claimed once; jobs are not automatically retried, so interrupted jobs cannot silently repeat a crawl. Normal failures are shown on the saved scan; worker timeouts use the failure callback, and polling recovers a running record older than 120 seconds if the worker was killed. Start a new scan after a failure. A storage failure retains the redacted fetched result and rolls back contact changes.
 
+### Diagnosing failed scans
+
+A failed fetch must produce **FAIL** in the worker and a failed saved scan. It is also registered in `php artisan queue:failed`; start a new scan rather than replaying the old job. Reaching the crawl budget after fetching useful pages is a successful partial scan with the time limit reported in its results. A timeout before any page is fetched is a failure.
+
+To test fetching directly on your Mac, without saving contacts or adding a queued scan, run:
+
+```sh
+php -d max_execution_time=0 artisan scrape:diagnose https://zlatibor.org.rs --website --json
+```
+
+The report includes PHP/Python/package versions, configured timeout layers, elapsed time, and a safe error category such as `dns_error`, `tls_error`, `connection_error`, `request_timeout`, `process_timeout`, or `http_error`. URL query strings, credentials, fragments, raw exceptions, and e-mail addresses are omitted. Share this report to diagnose a local failure. A `succeeded` report with a failed queued scan points to the worker or saving stage rather than the direct fetch; stop/restart the worker after pulling code updates. `php artisan config:clear` refreshes configuration changes.
+
+The worker regression suite uses a local HTTP fixture to test a real request timeout, partial results on budget exhaustion, and a worker run lasting over 30 seconds:
+
+```sh
+php artisan test --filter=EmailWorkerIntegrationTest
+```
+
+The deliberate long-running test takes approximately 31 seconds. Production fetch, crawl, subprocess, and queue limits remain bounded; TLS verification and public URL checks stay enabled.
+
 ## Installed Filament plugins
 
 | Plugin | What it provides |
