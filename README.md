@@ -83,6 +83,16 @@ The dedicated `scraping` connection uses the existing SQLite `jobs` table even w
 
 ### Diagnosing failed scans
 
+A failed scan can now be investigated in **E-mail scraper**, without opening a terminal log. **Scan activity** records submission, worker startup, Python fetching, saving, completion, and failure. It includes safe error categories, Python exception types, cURL/HTTP codes when available, and elapsed time on failure. **Recent scans** lets you reopen a failed attempt after refreshing the page.
+
+Expand **Diagnostic report** to see the database file actually used by Herd, row counts for scans/contacts/sources/queued and failed jobs, and a report you can select and copy. The report also includes the project directory, PHP executable/version/limits, Python path, cached-configuration state, and the worker runtime captured with each activity entry. This helps identify a stale worker, a different checkout/database, an unavailable Python interpreter, or a failure before fetching. A decryption failure explains that the worker and web app must share the existing application key; do not regenerate that key.
+
+Contacts and sources remain empty when the first page cannot be fetched. A successfully queued attempt must still have an `email_scans` row. The `jobs` row disappears after processing; a failed job should appear in `failed_jobs`. If your database tool shows no scans, compare its database path with the report before changing or clearing data.
+
+Activity is stored independently of database transactions in `storage/logs/email-scraper-YYYY-MM-DD.log`, rotated with a 14-day retention limit. The dashboard reads a bounded tail from today and yesterday, so a failed queue insertion still leaves visible evidence even when its transaction rolls back. Both Herd and the terminal worker need write access to `storage/logs`. Logs contain runtime paths, counts, and safe error metadata; they exclude request credentials/query strings, fetched content, raw exception messages, and contact addresses. The copied report also contains saved scan names and redacted starting URLs. These diagnostics remain administrator-only.
+
+After pulling, stop the previous worker, run `php artisan config:clear` and `npm run build`, then start the worker command above again. No new migration or dependency installation is needed for the dashboard diagnostics. Start a new scan; historical attempts cannot acquire worker details retroactively. If it fails, expand **Diagnostic report**, select/copy its contents, and share the report. This captures evidence of the local failure without guessing from its duration.
+
 A failed fetch must produce **FAIL** in the worker and a failed saved scan. It is also registered in `php artisan queue:failed`; start a new scan rather than replaying the old job. Reaching the crawl budget after fetching useful pages is a successful partial scan with the time limit reported in its results. A timeout before any page is fetched is a failure.
 
 To test fetching directly on your Mac, without saving contacts or adding a queued scan, run:

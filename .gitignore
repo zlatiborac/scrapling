@@ -35,3 +35,6 @@ __pycache__/
 
 # Local design-tool outputs and screenshots
 /.taste-skill/
+
+# Local test databases, diagnostics, and browser fixtures
+/work/

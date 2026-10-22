@@ -37,6 +37,7 @@
     @if ($error)
         <x-filament::section heading="Could not scan website">
             <p role="alert" class="text-sm text-danger-600 dark:text-danger-400">{{ $error }}</p>
+            <p class="mt-2 text-sm">Check Scan activity below for the last completed stage and error code. A failed first-page fetch saves no contacts; its scan record remains saved.</p>
         </x-filament::section>
     @endif
 
@@ -122,4 +123,6 @@
         </x-filament::section>
     @endif
     </div>
+
+    @include('filament.pages.partials.email-scan-diagnostics')
 </x-filament-panels::page>

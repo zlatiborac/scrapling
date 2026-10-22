@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Exceptions\EmailScanFailed;
 use App\Models\EmailScan;
 use App\Services\EmailArchive;
+use App\Services\EmailScanDiagnostics;
 use App\Services\EmailScanResult;
 use App\Services\EmailScraper;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -31,51 +32,86 @@ class ProcessEmailScan implements ShouldQueue
 
     public function handle(EmailScraper $scraper, EmailArchive $archive): void
     {
-        // Atomic claim: duplicate deliveries and cancelled/finished jobs never crawl again.
-        if (! EmailScan::whereKey($this->scanId)->where('status', 'queued')->update(['status' => 'running', 'started_at' => now()])) {
-            return;
-        }
-
+        $diagnostics = app(EmailScanDiagnostics::class);
+        $scan = null;
         try {
+            // Atomic claim: duplicate deliveries and cancelled/finished jobs never crawl again.
+            if (! EmailScan::whereKey($this->scanId)->where('status', 'queued')->update(['status' => 'running', 'started_at' => now()])) {
+                if (! EmailScan::whereKey($this->scanId)->exists()) {
+                    $diagnostics->record('scan_missing', $this->scanId);
+                    throw new EmailScanFailed('No saved scan exists for this job. Check Scan activity and the database shown in the diagnostic report.');
+                }
+
+                return;
+            }
+            $diagnostics->record('worker_started', $this->scanId);
             $scan = EmailScan::findOrFail($this->scanId);
             $user = $scan->user;
             if (! $user?->is_admin) {
                 throw new RuntimeException('Administrator access is no longer available.');
             }
             $request = $scan->request;
+            $diagnostics->record('fetching', $scan->id);
             $result = $scraper->scrape($request['url'], $scan->mode === 'website', $request['max_pages'], $request['max_depth']);
+            $diagnostics->record('fetched', $scan->id, counts: ['fetched_pages' => $result['fetched'], 'unique_emails' => count($result['emails'])]);
             $scan->update(['result' => EmailScanResult::sanitize($result)]);
 
-            DB::transaction(function () use ($scan, $result, $request, $user, $archive): void {
+            $completed = DB::transaction(function () use ($scan, $result, $request, $user, $archive): bool {
                 $current = EmailScan::whereKey($scan->id)->lockForUpdate()->firstOrFail();
                 if ($current->status !== 'running') {
-                    return;
+                    return false;
                 }
                 if (! $user->fresh()?->is_admin) {
                     throw new RuntimeException('Administrator access is no longer available.');
                 }
                 $archive->store($result, $request['url'], null, $user, $current);
                 $current->update(['status' => 'completed', 'request' => null, 'finished_at' => now(), 'failure_message' => null]);
+
+                return true;
             });
+            if ($completed) {
+                $diagnostics->record('completed', $scan->id);
+            }
         } catch (Throwable $exception) {
+            if ($exception instanceof EmailScanFailed) {
+                throw $exception;
+            }
+            if (! $scan) {
+                $diagnostics->record('claim_failed', $this->scanId, $exception);
+            }
             $this->failed($exception);
             // Returning normally makes Laravel print DONE even though the scan failed.
             // Throw a safe exception so the queue records FAIL without leaking the target URL.
-            throw new EmailScanFailed(EmailScan::find($this->scanId)?->failure_message ?? EmailScanResult::failureMessage($exception));
+            throw new EmailScanFailed($scan?->result !== null
+                ? 'The scan finished, but its e-mails could not be saved. Check the scan activity log.'
+                : $diagnostics->error($exception)['message']);
         }
     }
 
     public function failed(?Throwable $exception): void
     {
-        $scan = EmailScan::find($this->scanId);
+        $diagnostics = app(EmailScanDiagnostics::class);
+        try {
+            $scan = EmailScan::find($this->scanId);
+        } catch (Throwable $databaseException) {
+            $diagnostics->record('claim_failed', $this->scanId, $exception ?? $databaseException);
+
+            return;
+        }
         if (! $scan || ! in_array($scan->status, ['queued', 'running'], true)) {
             return;
         }
-        $scan->update([
-            'status' => 'failed', 'request' => null, 'finished_at' => now(),
-            'failure_message' => $scan->result !== null
-                ? 'The scan finished, but its e-mails could not be saved. Try a new scan after checking the database setup.'
-                : ($exception ? EmailScanResult::failureMessage($exception) : 'The background scan was interrupted. Start a new scan.'),
-        ]);
+        $diagnostics->record('failed', $scan->id, $exception, counts: $scan->started_at
+            ? ['elapsed_seconds' => round($scan->started_at->diffInSeconds(now()), 3)] : []);
+        try {
+            $scan->update([
+                'status' => 'failed', 'request' => null, 'finished_at' => now(),
+                'failure_message' => $scan->result !== null
+                    ? 'The scan finished, but its e-mails could not be saved. Try a new scan after checking the database setup.'
+                    : ($exception ? $diagnostics->error($exception)['message'] : 'The background scan was interrupted. Start a new scan.'),
+            ]);
+        } catch (Throwable $databaseException) {
+            $diagnostics->record('failed', $scan->id, $databaseException);
+        }
     }
 }

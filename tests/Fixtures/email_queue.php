@@ -5,6 +5,7 @@ use App\Models\EmailContact;
 use App\Models\EmailContactSource;
 use App\Models\EmailScan;
 use App\Models\User;
+use App\Services\EmailScanDiagnostics;
 use App\Services\EmailScanQueue;
 use App\Services\EmailScraper;
 use Illuminate\Contracts\Console\Kernel;
@@ -20,6 +21,7 @@ $app->make(Kernel::class)->bootstrap();
 if (! $app->environment('testing')) {
     throw new RuntimeException('This fixture is only for testing.');
 }
+config(['scrapling.email_diagnostic_log' => DB::connection()->getDatabaseName().'.log']);
 
 $mode = $argv[1];
 $events = [];
@@ -69,6 +71,6 @@ $report = [
 if (! in_array($mode, ['submit', 'work'], true)) {
     $report += ['worker_output' => Artisan::output(), 'events' => $events,
         'failed_jobs' => DB::table('failed_jobs')->count(), 'failure_message' => EmailScan::sole()->failure_message,
-        'result' => EmailScan::sole()->result];
+        'result' => EmailScan::sole()->result, 'diagnostics' => app(EmailScanDiagnostics::class)->report(EmailScan::sole()->id)];
 }
 echo json_encode($report, JSON_THROW_ON_ERROR);

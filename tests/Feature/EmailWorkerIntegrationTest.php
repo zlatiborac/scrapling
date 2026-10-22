@@ -23,6 +23,13 @@ class EmailWorkerIntegrationTest extends TestCase
         $this->assertStringContainsString('FAIL', $report['worker_output']);
         $this->assertStringNotContainsString('DONE', $report['worker_output']);
         $this->assertStringContainsString('website request timed out', $report['failure_message']);
+        $this->assertSame(1, $report['diagnostics']['table_counts']['email_scans']);
+        $this->assertSame(0, $report['diagnostics']['table_counts']['email_contacts']);
+        $activity = $report['diagnostics']['recent_activity'];
+        $this->assertSame(['queued', 'worker_started', 'fetching', 'failed'], array_column($activity, 'event'));
+        $this->assertSame('request_timeout', end($activity)['error']['reason']);
+        $this->assertSame(28, end($activity)['error']['curl_code']);
+        $this->assertSame('0', end($activity)['runtime']['php_max_execution_time']);
     }
 
     public function test_real_crawl_budget_exhaustion_preserves_partial_emails_as_success(): void
@@ -74,6 +81,9 @@ class EmailWorkerIntegrationTest extends TestCase
                 if (is_file($file)) {
                     unlink($file);
                 }
+            }
+            foreach (glob($database.'-*.log') ?: [] as $file) {
+                unlink($file);
             }
         }
     }

@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Exceptions\EmailFetchFailed;
 use App\Jobs\ProcessEmailScan;
 use App\Services\EmailArchive;
+use App\Services\EmailScanDiagnostics;
 use App\Services\EmailScanResult;
 use App\Services\EmailScraper;
 use Illuminate\Console\Command;
@@ -58,7 +59,7 @@ class DiagnoseEmailScrape extends Command
                 $exception = new EmailFetchFailed('python_unavailable');
             }
             $report = array_replace($report, ['status' => 'failed', 'reason' => $exception instanceof EmailFetchFailed ? $exception->reason : 'runtime_error',
-                'message' => EmailScanResult::failureMessage($exception)]);
+                'message' => EmailScanResult::failureMessage($exception), 'error' => app(EmailScanDiagnostics::class)->error($exception)]);
         }
         $report['elapsed_seconds'] = round((hrtime(true) - $started) / 1_000_000_000, 3);
 

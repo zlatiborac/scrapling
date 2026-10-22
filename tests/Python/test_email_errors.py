@@ -16,6 +16,8 @@ class EmailErrorsTest(unittest.TestCase):
             with self.subTest(curl_code=curl_code):
                 result = describe_error(CurlError("https://example.com/?token=private-token", code=curl_code))
                 self.assertEqual(expected, result["code"])
+                self.assertEqual(curl_code, result["curl_code"])
+                self.assertEqual("CurlError", result["exception_type"])
                 self.assertNotIn("private-token", str(result))
 
     def test_dns_crawl_and_unknown_errors_are_safe(self):

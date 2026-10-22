@@ -10,7 +10,7 @@ class EmailScraperProtocolTest extends TestCase
 {
     public function test_structured_errors_survive_stderr_logging_without_exposing_tokens(): void
     {
-        $this->withInterpreter('log: https://example.com/?token=private-token'."\n".'{"error":{"code":"request_timeout"}}', true, function (): void {
+        $this->withInterpreter('log: https://example.com/?token=private-token'."\n".'{"error":{"code":"request_timeout","exception_type":"Timeout","curl_code":28,"message":"private-token"}}', true, function (): void {
             try {
                 app(EmailScraper::class)->scrape('https://example.com');
                 $this->fail('The fetch should fail.');
@@ -18,6 +18,21 @@ class EmailScraperProtocolTest extends TestCase
                 $this->assertSame('request_timeout', $exception->reason);
                 $this->assertStringContainsString('website request timed out', $exception->getMessage());
                 $this->assertStringNotContainsString('private-token', $exception->getMessage());
+                $this->assertSame(['python_exception' => 'Timeout', 'curl_code' => 28, 'process_exit_code' => 1], $exception->details);
+            }
+        });
+    }
+
+    public function test_raw_python_traceback_keeps_only_the_exception_type(): void
+    {
+        $this->withInterpreter("Traceback: private-token\nModuleNotFoundError: No module named 'secret-path'", true, function (): void {
+            try {
+                app(EmailScraper::class)->scrape('https://example.com');
+                $this->fail('Missing modules should fail.');
+            } catch (EmailFetchFailed $exception) {
+                $this->assertSame('python_error', $exception->reason);
+                $this->assertSame('ModuleNotFoundError', $exception->details['python_exception']);
+                $this->assertStringNotContainsString('secret-path', json_encode($exception->details));
             }
         });
     }

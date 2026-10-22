@@ -12,6 +12,10 @@ class FetchError(ValueError):
 
 
 def describe_error(exc):
+    return _describe_error(exc) | {"exception_type": type(exc).__name__}
+
+
+def _describe_error(exc):
     if isinstance(exc, FetchError):
         return {"code": exc.code, "message": str(exc), "http_status": exc.http_status}
     if isinstance(exc, socket.gaierror):
@@ -23,7 +27,7 @@ def describe_error(exc):
             5: "dns_error", 6: "dns_error", 7: "connection_error", 28: "request_timeout",
             35: "tls_error", 51: "tls_error", 58: "tls_error", 60: "tls_error", 77: "tls_error", 83: "tls_error",
         }.get(int(exc.code), "fetch_error")
-        return {"code": code, "message": {
+        return {"code": code, "curl_code": int(exc.code), "message": {
             "dns_error": "DNS lookup failed", "connection_error": "Connection failed",
             "request_timeout": "Website request timed out", "tls_error": "TLS verification or negotiation failed",
         }.get(code, "Could not fetch this page")}

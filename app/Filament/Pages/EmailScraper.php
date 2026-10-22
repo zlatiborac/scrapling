@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Models\EmailScan;
+use App\Services\EmailScanDiagnostics;
 use App\Services\EmailScanQueue;
 use BackedEnum;
 use Closure;
@@ -12,6 +13,7 @@ use Filament\Pages\Page;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\RateLimiter;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 use Throwable;
@@ -45,6 +47,28 @@ class EmailScraper extends Page
     public static function canAccess(): bool
     {
         return (bool) auth()->user()?->is_admin;
+    }
+
+    #[Computed]
+    public function diagnostics(): array
+    {
+        abort_unless(auth()->user()?->is_admin, 403);
+
+        return app(EmailScanDiagnostics::class)->report($this->scanId);
+    }
+
+    #[Computed]
+    public function recentScans()
+    {
+        abort_unless(auth()->user()?->is_admin, 403);
+
+        return EmailScan::latest('id')->limit(10)->get(['id', 'name', 'status', 'created_at']);
+    }
+
+    public function refreshDiagnostics(): void
+    {
+        abort_unless(auth()->user()?->is_admin, 403);
+        unset($this->diagnostics, $this->recentScans);
     }
 
     public function mount(): void
@@ -147,9 +171,12 @@ class EmailScraper extends Page
         // Normal polls only read, avoiding SQLite write contention while archiving.
         if ($scan->status === 'running' && $scan->started_at?->lt(now()->subSeconds(120))) {
             // Recover a killed worker without auto-repeating the crawl.
-            EmailScan::whereKey($scan->id)->where('status', 'running')->where('started_at', '<', now()->subSeconds(120))
+            $recovered = EmailScan::whereKey($scan->id)->where('status', 'running')->where('started_at', '<', now()->subSeconds(120))
                 ->update(['status' => 'failed', 'request' => null, 'finished_at' => now(),
                     'failure_message' => 'The background scan was interrupted or exceeded its time limit. Start a new scan.']);
+            if ($recovered) {
+                app(EmailScanDiagnostics::class)->record('interrupted', $scan->id);
+            }
             $scan->refresh();
         }
 
@@ -176,9 +203,12 @@ class EmailScraper extends Page
     {
         abort_unless(auth()->user()?->is_admin, 403);
         if ($this->scanId) {
-            EmailScan::whereKey($this->scanId)->where('status', 'queued')->update([
+            $cancelled = EmailScan::whereKey($this->scanId)->where('status', 'queued')->update([
                 'status' => 'failed', 'request' => null, 'finished_at' => now(), 'failure_message' => 'The queued scan was cancelled.',
             ]);
+            if ($cancelled) {
+                app(EmailScanDiagnostics::class)->record('cancelled', $this->scanId);
+            }
             $this->refreshScan();
         }
     }

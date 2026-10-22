@@ -45,7 +45,12 @@ class EmailScraper
             $error = json_decode(end($lines) ?: '{}', true);
             $reason = $error['error']['code'] ?? null;
             $status = $error['error']['http_status'] ?? null;
-            throw new EmailFetchFailed(is_string($reason) ? $reason : ($process->getExitCode() === 127 ? 'python_unavailable' : 'python_error'), is_int($status) ? $status : null);
+            $details = is_array($error['error'] ?? null) ? $error['error'] : [];
+            $details['process_exit_code'] = $process->getExitCode();
+            if (! isset($details['exception_type']) && preg_match('/^([A-Za-z_][A-Za-z0-9_]{0,79}):/', end($lines) ?: '', $matches)) {
+                $details['exception_type'] = $matches[1];
+            }
+            throw new EmailFetchFailed(is_string($reason) ? $reason : ($process->getExitCode() === 127 ? 'python_unavailable' : 'python_error'), is_int($status) ? $status : null, $details);
         }
 
         try {

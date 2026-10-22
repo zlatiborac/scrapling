@@ -10,7 +10,9 @@ class EmailFetchFailed extends RuntimeException
 
     public readonly ?int $httpStatus;
 
-    public function __construct(string $reason, ?int $httpStatus = null)
+    public readonly array $details;
+
+    public function __construct(string $reason, ?int $httpStatus = null, array $details = [])
     {
         $messages = [
             'invalid_url' => 'Enter an HTTP or HTTPS URL without embedded credentials.',
@@ -30,6 +32,11 @@ class EmailFetchFailed extends RuntimeException
         ];
         $this->reason = array_key_exists($reason, $messages) ? $reason : 'fetch_error';
         $this->httpStatus = $httpStatus >= 400 && $httpStatus <= 599 ? $httpStatus : null;
+        $this->details = array_filter([
+            'python_exception' => isset($details['exception_type']) && is_string($details['exception_type']) && preg_match('/^[A-Za-z_][A-Za-z0-9_]{0,79}$/D', $details['exception_type']) ? $details['exception_type'] : null,
+            'curl_code' => isset($details['curl_code']) && is_int($details['curl_code']) && $details['curl_code'] >= 0 && $details['curl_code'] <= 999 ? $details['curl_code'] : null,
+            'process_exit_code' => isset($details['process_exit_code']) && is_int($details['process_exit_code']) ? $details['process_exit_code'] : null,
+        ], static fn ($value): bool => $value !== null);
         parent::__construct($this->reason === 'http_error' && $this->httpStatus !== null
             ? 'Target returned HTTP '.$this->httpStatus
             : $messages[$this->reason]);
