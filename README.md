@@ -62,6 +62,8 @@ Use **Saved e-mails** (`/admin/saved-emails`) to search contacts, filter by save
 
 Stored scan/source URLs and crawl results omit credentials, query strings, and fragments, so source pages distinguished only by a query string are grouped. A redacted crawl log is retained for reopening results; page HTML and raw exception messages are not stored in scan records. The original request URL is temporarily encrypted with the application's existing key so the worker can fetch it, and is cleared on completion, failure, or cancellation. Earlier saved scans keep their contacts and names but have no stored crawl log. Scans made before the archive feature must be rerun to save their addresses. The archive is separate from Scrape history.
 
+Saved URL paths use percent escapes for non-ASCII characters, including Serbian Latin and Cyrillic, while preserving existing escapes. Malformed URL bytes are also escaped, and invalid text in the optional crawl log is replaced with the Unicode replacement character when saving JSON. This prevents one malformed entry from discarding valid contacts; invalid e-mail addresses are still skipped and encrypted request data remains strict.
+
 After pulling this update on your Mac, apply the queue-state migration and refresh configuration and theme styles:
 
 ```sh
@@ -94,6 +96,8 @@ Activity is stored independently of database transactions in `storage/logs/email
 After pulling, stop the previous worker, run `php artisan config:clear` and `npm run build`, then start the worker command above again. No new migration or dependency installation is needed for the dashboard diagnostics. Start a new scan; historical attempts cannot acquire worker details retroactively. If it fails, expand **Diagnostic report**, select/copy its contents, and share the report. This captures evidence of the local failure without guessing from its duration.
 
 A failed fetch must produce **FAIL** in the worker and a failed saved scan. It is also registered in `php artisan queue:failed`; start a new scan rather than replaying the old job. Reaching the crawl budget after fetching useful pages is a successful partial scan with the time limit reported in its results. A timeout before any page is fetched is a failure.
+
+Activity separates Python returning results, saving the crawl log, and archiving contacts. A `json_encoding_error` includes a safe `encoding_error` category such as `invalid_utf8` and is reported as a saving failure, even if the crawl log could not be stored. It does not mean fetching failed. After pulling the encoding fix, stop/restart the worker and start a fresh scan; earlier failed attempts without a stored result must be rerun. No migration or asset rebuild is needed for this backend fix.
 
 To test fetching directly on your Mac, without saving contacts or adding a queued scan, run:
 

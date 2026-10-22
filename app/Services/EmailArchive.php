@@ -62,6 +62,9 @@ class EmailArchive
 
     public static function safeUrl(string $url): ?string
     {
+        // Parse ASCII URIs, avoiding locale-dependent handling of UTF-8 bytes on macOS.
+        // Existing percent escapes stay intact; malformed bytes are preserved as escapes.
+        $url = preg_replace_callback('/[^\x21-\x7E]/', static fn (array $match): string => rawurlencode($match[0]), $url);
         $parts = parse_url($url);
         if (! is_array($parts) || ! in_array($parts['scheme'] ?? '', ['http', 'https'], true) || empty($parts['host'])) {
             return null;

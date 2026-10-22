@@ -6,6 +6,7 @@ use App\Exceptions\EmailFetchFailed;
 use App\Jobs\ProcessEmailScan;
 use App\Models\EmailScan;
 use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Database\Eloquent\JsonEncodingException;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\SQLiteDatabaseDoesNotExistException;
 use Illuminate\Queue\MaxAttemptsExceededException;
@@ -19,7 +20,7 @@ use Throwable;
 class EmailScanDiagnostics
 {
     // Bump when the diagnostic protocol changes; a running worker retains its loaded version.
-    public const VERSION = 1;
+    public const VERSION = 2;
 
     private const EVENTS = [
         'queued' => 'Scan saved and added to the queue.',
@@ -28,7 +29,8 @@ class EmailScanDiagnostics
         'claim_failed' => 'Worker could not read or claim the saved scan.',
         'scan_missing' => 'Worker found no saved scan for this job. Check the database and project directory in the report.',
         'fetching' => 'Starting the Python e-mail scraper.',
-        'fetched' => 'Python returned results; saving e-mails.',
+        'fetched' => 'Python returned results; saving the crawl log.',
+        'archiving' => 'Crawl log saved; saving e-mails and source pages.',
         'completed' => 'E-mails saved; scan completed.',
         'failed' => 'Scan failed.',
         'cancelled' => 'Queued scan cancelled.',
@@ -73,6 +75,15 @@ class EmailScanDiagnostics
         $error = ['exception_type' => $exception::class, 'message' => EmailScanResult::failureMessage($exception)];
         if ($exception instanceof EmailFetchFailed) {
             $error += ['reason' => $exception->reason, 'http_status' => $exception->httpStatus] + $exception->details;
+        } elseif ($exception instanceof JsonEncodingException) {
+            $error += ['reason' => 'json_encoding_error', 'encoding_error' => match (true) {
+                str_contains($exception->getMessage(), 'Malformed UTF-8') => 'invalid_utf8',
+                str_contains($exception->getMessage(), 'Recursion') => 'recursion',
+                str_contains($exception->getMessage(), 'Inf and NaN') => 'non_finite_number',
+                str_contains($exception->getMessage(), 'Maximum stack depth') => 'depth',
+                str_contains($exception->getMessage(), 'Type is not supported') => 'unsupported_type',
+                default => 'unknown',
+            }];
         } elseif ($exception instanceof QueryException || $exception instanceof PDOException || $exception instanceof SQLiteDatabaseDoesNotExistException) {
             $error += ['reason' => 'database_error', 'sqlstate' => (string) $exception->getCode()];
             $error['message'] = 'The database operation failed. Check migrations, the database file, and write permissions.';

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\EmailFetchFailed;
+use Illuminate\Database\Eloquent\JsonEncodingException;
 use Illuminate\Queue\MaxAttemptsExceededException;
 use Illuminate\Queue\TimeoutExceededException;
 use Throwable;
@@ -36,6 +37,9 @@ class EmailScanResult
     {
         if ($exception instanceof EmailFetchFailed) {
             return $exception->getMessage();
+        }
+        if ($exception instanceof JsonEncodingException) {
+            return 'The scan data could not be saved as JSON. Check Scan activity for the encoding error.';
         }
         if ($exception instanceof TimeoutExceededException || $exception instanceof MaxAttemptsExceededException) {
             return 'The background worker exceeded its execution limit or was interrupted. Start a new scan.';

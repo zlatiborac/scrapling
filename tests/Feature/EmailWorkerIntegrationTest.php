@@ -43,6 +43,20 @@ class EmailWorkerIntegrationTest extends TestCase
         $this->assertStringContainsString('DONE', $report['worker_output']);
     }
 
+    public function test_real_worker_archives_serbian_url_paths_and_the_crawl_log(): void
+    {
+        $report = $this->runScenario('/emails/unicode', 'work-unicode')['worker'];
+        $this->assertSame('completed', $report['status']);
+        $this->assertSame(2, $report['contacts']);
+        $this->assertSame(3, $report['sources']);
+        $this->assertSame(0, $report['failed_jobs']);
+        $this->assertSame(['processed'], $report['events']);
+        $path = str_replace('%2F', '/', rawurlencode('čćžšđ/Туризам'));
+        $this->assertStringEndsWith('/emails/'.$path, $report['result']['pages'][1]['url']);
+        $this->assertStringNotContainsString('private-token', json_encode($report));
+        $this->assertSame(['queued', 'worker_started', 'fetching', 'fetched', 'archiving', 'completed'], array_column($report['diagnostics']['recent_activity'], 'event'));
+    }
+
     public function test_real_worker_can_finish_after_the_30_second_web_request_limit(): void
     {
         $report = $this->runScenario('/emails', 'work-over-30');

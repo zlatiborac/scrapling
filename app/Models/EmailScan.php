@@ -18,6 +18,13 @@ class EmailScan extends Model
         return ['request' => 'encrypted:array', 'result' => 'array', 'started_at' => 'datetime', 'finished_at' => 'datetime'];
     }
 
+    protected function getJsonCastFlags($key): int
+    {
+        // A bad byte in optional crawl text must not discard every valid contact.
+        // Keep encrypted request data and other attributes strict.
+        return parent::getJsonCastFlags($key) | ($key === 'result' ? JSON_INVALID_UTF8_SUBSTITUTE : 0);
+    }
+
     public function contacts(): BelongsToMany
     {
         return $this->belongsToMany(EmailContact::class);

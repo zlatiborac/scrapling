@@ -25,6 +25,8 @@ class ProcessEmailScan implements ShouldQueue
 
     public bool $failOnTimeout = true;
 
+    private bool $hasFetchedResult = false;
+
     public function __construct(public int $scanId)
     {
         $this->onConnection('scraping')->onQueue('email-scans');
@@ -53,8 +55,10 @@ class ProcessEmailScan implements ShouldQueue
             $request = $scan->request;
             $diagnostics->record('fetching', $scan->id);
             $result = $scraper->scrape($request['url'], $scan->mode === 'website', $request['max_pages'], $request['max_depth']);
+            $this->hasFetchedResult = true;
             $diagnostics->record('fetched', $scan->id, counts: ['fetched_pages' => $result['fetched'], 'unique_emails' => count($result['emails'])]);
             $scan->update(['result' => EmailScanResult::sanitize($result)]);
+            $diagnostics->record('archiving', $scan->id);
 
             $completed = DB::transaction(function () use ($scan, $result, $request, $user, $archive): bool {
                 $current = EmailScan::whereKey($scan->id)->lockForUpdate()->firstOrFail();
@@ -82,9 +86,7 @@ class ProcessEmailScan implements ShouldQueue
             $this->failed($exception);
             // Returning normally makes Laravel print DONE even though the scan failed.
             // Throw a safe exception so the queue records FAIL without leaking the target URL.
-            throw new EmailScanFailed($scan?->result !== null
-                ? 'The scan finished, but its e-mails could not be saved. Check the scan activity log.'
-                : $diagnostics->error($exception)['message']);
+            throw new EmailScanFailed($this->failureMessage($exception, $scan));
         }
     }
 
@@ -106,12 +108,19 @@ class ProcessEmailScan implements ShouldQueue
         try {
             $scan->update([
                 'status' => 'failed', 'request' => null, 'finished_at' => now(),
-                'failure_message' => $scan->result !== null
-                    ? 'The scan finished, but its e-mails could not be saved. Try a new scan after checking the database setup.'
-                    : ($exception ? $diagnostics->error($exception)['message'] : 'The background scan was interrupted. Start a new scan.'),
+                'failure_message' => $this->failureMessage($exception, $scan),
             ]);
         } catch (Throwable $databaseException) {
             $diagnostics->record('failed', $scan->id, $databaseException);
         }
+    }
+
+    private function failureMessage(?Throwable $exception, ?EmailScan $scan): string
+    {
+        if ($this->hasFetchedResult || $scan?->result !== null) {
+            return 'The website was fetched, but its results could not be saved. Check Scan activity and start a new scan.';
+        }
+
+        return $exception ? app(EmailScanDiagnostics::class)->error($exception)['message'] : 'The background scan was interrupted. Start a new scan.';
     }
 }
